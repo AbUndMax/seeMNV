@@ -1,4 +1,6 @@
 package com.github.abundmax.seemnv.cli;
+import ArgsParser.ArgsParser;
+import ArgsParser.ParameterTypes.PthParameter;
 
 
 public class Main {
@@ -10,5 +12,15 @@ public class Main {
         for (String arg : args) {
             System.out.println(arg);
         }
+
+        ArgsParser parser = new ArgsParser("Identify and note in-codon MNVs in VCF files");
+        parser.addParameter(new PthParameter("vcfPath",
+                                             "vp",
+                                             "Path to the VCF file.",
+                                             true, true));
+        parser.addParameter(new PthParameter("outPath",
+                                             "o",
+                                             "Path where the output VCF file should be saved.",
+                                             true, false));
     }
 }
