@@ -59,7 +59,7 @@ public class FieldArray<T extends Comparable<? super T>> {
      * @return
      */
     @SafeVarargs
-    public static <T extends Comparable<? super T>> FieldArray<T> combine(
+    private static <T extends Comparable<? super T>> FieldArray<T> combine(
             FieldArray<T>... fieldArrays
     ) {
         if (fieldArrays == null || fieldArrays.length == 0) {
@@ -93,6 +93,40 @@ public class FieldArray<T extends Comparable<? super T>> {
                 first.matrixFactory,
                 combinedArray
         );
+    }
+
+    public static FieldArray<?> combineWildcard(FieldArray<?>... fieldArrays) {
+        validateCompatibleWildcards(fieldArrays);
+        return combineUnchecked(fieldArrays);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static FieldArray<?> combineUnchecked(FieldArray<?>[] fieldArrays) {
+        return combine((FieldArray[]) fieldArrays);
+    }
+
+    private static void validateCompatibleWildcards(FieldArray<?>[] fieldArrays) {
+        if (fieldArrays == null || fieldArrays.length == 0) {
+            throw new IllegalArgumentException("At least one FieldArray is required");
+        }
+
+        int length = fieldArrays[0].length;
+        FieldConfig config = fieldArrays[0].fieldConfig;
+        Class<?> type = config.FIELD_TYPE.getType();
+
+        for (FieldArray<?> fieldArray : fieldArrays) {
+            if (fieldArray.length != length) {
+                throw new IllegalStateException("FieldArrays have to be the same size");
+            }
+
+            if (fieldArray.fieldConfig != config) {
+                throw new IllegalArgumentException("FieldArrays must have the same FieldConfig");
+            }
+
+            if (fieldArray.fieldConfig.FIELD_TYPE.getType() != type) {
+                throw new IllegalArgumentException("FieldArrays must have the same value type");
+            }
+        }
     }
 
     private static <T extends Comparable<? super T>> void validateCompatible(
