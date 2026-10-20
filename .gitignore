@@ -11,6 +11,7 @@ target/
 *.iml
 *.ipr
 algorithm.pdf
+vcfFormatSpec.pdf
 
 ### Eclipse ###
 .apt_generated
