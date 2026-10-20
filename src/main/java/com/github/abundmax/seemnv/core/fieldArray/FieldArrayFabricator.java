@@ -37,11 +37,11 @@ public class FieldArrayFabricator {
     );
 
     public static Function<String[], FieldArray<?>> get(FieldConfig fieldConfig) {
-        Function<FieldConfig, Function<String[], FieldArray<?>>> factory = REGISTRY.get(fieldConfig.FIELD_TYPE);
+        Function<FieldConfig, Function<String[], FieldArray<?>>> factory = REGISTRY.get(fieldConfig.fieldType);
 
         if (factory == null) {
             throw new IllegalArgumentException(
-                    "Unsupported field type: " + fieldConfig.FIELD_TYPE.getLabel()
+                    "Unsupported field type: " + fieldConfig.fieldType.getLabel()
             );
         }
 

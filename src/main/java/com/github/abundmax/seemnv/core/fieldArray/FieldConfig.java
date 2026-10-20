@@ -5,17 +5,9 @@ import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Map;
 import java.util.Properties;
 
 public class FieldConfig {
-
-    private static final Map<String, Class<?>> STRING_TO_CLASS = Map.of(
-            "string", String.class,
-            "integer", Integer.class,
-            "float", Float.class,
-            "boolean", Boolean.class
-    );
 
     private static final Path AGGREGATION_PROPERTIES_PATH = Paths.get("config", "aggregation.properties");
     private static final Properties CONFIG = new Properties();
@@ -30,10 +22,10 @@ public class FieldConfig {
         }
     }
 
-    public final String ID;
-    public final String NUMBER;
-    public final FieldType FIELD_TYPE;
-    public final FieldAggregationStrategy AGGREGATION_STRATEGY;
+    public final String id;
+    public final String number;
+    public final FieldType fieldType;
+    public final FieldAggregationStrategy aggregationStrategy;
 
     public FieldConfig(String headerLineFormat) {
         // eg.: ##FORMAT=<ID=AD,Number=R,Type=Integer>
@@ -42,16 +34,16 @@ public class FieldConfig {
         String[] split = headerLineFormat.split(",");
         // ["ID=AD", "Number=R", "Type=Integer>"]
 
-        ID = split[0].split("=")[1]; // "AD"
-        NUMBER = split[1].split("=")[1]; // "R"
+        id = split[0].split("=")[1]; // "AD"
+        number = split[1].split("=")[1]; // "R"
         String type = split[2].split("=")[1]; // "Integer"
-        FIELD_TYPE = FieldType.fromString(type);
+        fieldType = FieldType.fromString(type);
 
-        String definedStrategy = CONFIG.getProperty(ID);
+        String definedStrategy = CONFIG.getProperty(id);
         if (definedStrategy == null) {
-            throw new IllegalArgumentException("No valid FORMAT ID specified in aggregation.properties for ID: " + ID);
+            throw new IllegalArgumentException("No valid FORMAT ID specified in aggregation.properties for ID: " + id);
         }
 
-        AGGREGATION_STRATEGY = FieldAggregationStrategy.fromString(definedStrategy);
+        aggregationStrategy = FieldAggregationStrategy.fromString(definedStrategy);
     }
 }
