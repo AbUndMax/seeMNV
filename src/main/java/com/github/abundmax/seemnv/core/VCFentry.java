@@ -3,6 +3,8 @@ package com.github.abundmax.seemnv.core;
 
 import com.github.abundmax.seemnv.core.fieldArray.FieldArray;
 import com.github.abundmax.seemnv.core.fieldArray.FieldArrayFabricator;
+import com.github.abundmax.seemnv.core.fieldArray.FieldConfig;
+import com.github.abundmax.seemnv.core.fieldArray.Genotype;
 
 import java.util.Arrays;
 
@@ -18,6 +20,9 @@ public class VCFentry {
     private final String FILTER;
     private final String INFO;
     private final String[] FORMAT;
+    private final String[] noGtFormat;
+
+    private final Genotype[] gtArray;
 
     // they match exactkly the order of FORMAT
     // i.e. FORMAT= [GT, AD, FP] -> fieldArrays= [GTarray, ADarray, FParray]
@@ -42,18 +47,81 @@ public class VCFentry {
         INFO = entry[7];
         FORMAT = entry[8].split(":");
 
-        fieldArrays = new FieldArray[FORMAT.length];
-        buildFieldArrays(Arrays.copyOfRange(entry, 9, entry.length));
+
+        // GT arrays are held seperatly since most of the cMNV combination logic is based on them!
+        String[] formatSplit = entry[8].split(":");
+
+        // separat FORMAT contained that resembles the order of Fields in the FieldArray[]
+        noGtFormat = new String[formatSplit.length - 1];
+
+        boolean gtContained = false;
+        int j = 0;
+        for (int i = 0; i < formatSplit.length; i++) {
+            if (formatSplit[i].equalsIgnoreCase("GT")) {
+                gtContained = true;
+                i++;
+            }
+            noGtFormat[j++] = formatSplit[i];
+        }
+
+        if (!gtContained) throw new IllegalArgumentException("VCFentry: " + CHROM + POS + "does not contain GT values!");
+
+        String[] sampleColumns = Arrays.copyOfRange(entry, 9, entry.length);
+        fieldArrays = new FieldArray[noGtFormat.length];
+        gtArray = new Genotype[sampleColumns.length];
+        buildFieldArrays(sampleColumns);
     }
+
 
     private void buildFieldArrays(String[] sampleColumns) {
 
-        for (int i = 0; i < this.FORMAT.length; i++) {
-            String fieldID = FORMAT[i];
-            // fieldArrays[i] = FieldArrayFabricator.get(Core.fieldToConfig.get(fieldID));
+        String[][] formattedSampleColumns = reformatSampleColumns(sampleColumns);
+
+        int fieldArrayIdx = 0;
+        for (int fieldIdx = 0; fieldIdx < this.FORMAT.length; fieldIdx++) {
+            String fieldID = FORMAT[fieldIdx];
+
+            if (fieldID.equalsIgnoreCase("GT")) {
+                fillGtArray(formattedSampleColumns[fieldIdx]);
+                continue;
+            }
+
+            FieldConfig fieldConfig = Core.fieldToConfig.get(fieldID);
+            fieldArrays[fieldArrayIdx++] = FieldArrayFabricator.get(fieldConfig).apply(formattedSampleColumns[fieldIdx]);
         }
 
         //TODO...
+    }
+
+    /**
+     * Transfers the per sample information into a per field matrix:
+     *
+     * input:  [GT(sample1):AF(sample1):DP(sample1), GT(sample2):Af(sample2):DP(sample2), ...]
+     * Output: [[GT(sample1), GT(sample2), ...], [AF(sample1), AF(sample2), ...], [DP(sample1), DP(sample2), ...]]
+     *
+     * Since th input follows the specified FORMAT order in the vcf entry, the order of Fields in the resulting
+     * Matrix is the same.
+     * @param sampleColumns
+     */
+    private String[][] reformatSampleColumns(String[] sampleColumns) {
+
+        String[][] result = new String[FORMAT.length][sampleColumns.length];
+
+        for (int sampleIdx = 0; sampleIdx < sampleColumns.length; sampleIdx++) {
+            String[] split = sampleColumns[sampleIdx].split(":");
+
+            for (int fieldIdx = 0; fieldIdx < split.length; fieldIdx++) {
+                result[fieldIdx][sampleIdx] = split[fieldIdx];
+            }
+        }
+
+        return result;
+    }
+
+    private void fillGtArray(String[] stringGtArray) {
+        for (int i = 0; i < gtArray.length; i++) {
+            gtArray[i] = new Genotype(stringGtArray[i]);
+        }
     }
 
     public FieldArray<?>[] getFieldArrays() {
@@ -62,6 +130,46 @@ public class VCFentry {
 
     public String[] getFORMAT() {
         return FORMAT;
+    }
+
+    public String getCHROM() {
+        return CHROM;
+    }
+
+    public Integer getPOS() {
+        return POS;
+    }
+
+    public String getID() {
+        return ID;
+    }
+
+    public String getREF() {
+        return REF;
+    }
+
+    public String getALT() {
+        return ALT;
+    }
+
+    public String getQUAL() {
+        return QUAL;
+    }
+
+    public String getFILTER() {
+        return FILTER;
+    }
+
+    public String getINFO() {
+        return INFO;
+    }
+
+    public String[] getNoGtFormat() {
+        return noGtFormat;
+    }
+
+    public Genotype[] getGtArray() {
+        return gtArray;
     }
 
     public static VCFentry combine(VCFentry... entries) {
