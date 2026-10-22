@@ -265,7 +265,7 @@ public class FieldArrayTests {
     }
 
     private FieldConfig createConfig(String id, String number, String type) {
-        return new FieldConfig(
+        return FieldConfig.buildFromHeaderString(
                 "##FORMAT=<ID=" + id +
                         ",Number=" + number +
                         ",Type=" + type +

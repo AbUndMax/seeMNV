@@ -2,7 +2,6 @@ package com.github.abundmax.seemnv.core;
 
 import com.github.abundmax.seemnv.core.fieldArray.FieldArray;
 import com.github.abundmax.seemnv.core.fieldArray.FieldConfig;
-import com.github.abundmax.seemnv.core.fieldArray.VCFRecord;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -13,12 +12,12 @@ public class ParsedVCFEntryTest {
 
     @BeforeAll
     static void setup() {
-        Core.fieldToConfig.put("AF", new FieldConfig("##FORMAT=<ID=AF,Number=A,Type=Float,Description=\"Allele fractions of alternate alleles in the tumor\">"));
-        Core.fieldToConfig.put("DP", new FieldConfig("##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Approximate read depth (reads with MQ=255 or with bad mates are filtered)\">"));
-        Core.fieldToConfig.put("GQ", new FieldConfig("##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype Quality\">"));
-        // Core.fieldToConfig.put("GT", new FieldConfig("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">"));
-        Core.fieldToConfig.put("PL", new FieldConfig("##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"Normalized, Phred-scaled likelihoods for genotypes as defined in the VCF specification\">"));
-        Core.fieldToConfig.put("AD", new FieldConfig("##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allelic depths for the ref and alt alleles in the order listed\">"));
+        Core.fieldToConfig.put("AF", FieldConfig.buildFromHeaderString("##FORMAT=<ID=AF,Number=A,Type=Float,Description=\"Allele fractions of alternate alleles in the tumor\">"));
+        Core.fieldToConfig.put("DP", FieldConfig.buildFromHeaderString("##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Approximate read depth (reads with MQ=255 or with bad mates are filtered)\">"));
+        Core.fieldToConfig.put("GQ", FieldConfig.buildFromHeaderString("##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype Quality\">"));
+        // Core.fieldToConfig.put("GT", FieldConfig.buildFromHeaderString("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">"));
+        Core.fieldToConfig.put("PL", FieldConfig.buildFromHeaderString("##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"Normalized, Phred-scaled likelihoods for genotypes as defined in the VCF specification\">"));
+        Core.fieldToConfig.put("AD", FieldConfig.buildFromHeaderString("##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allelic depths for the ref and alt alleles in the order listed\">"));
     }
 
     @Test

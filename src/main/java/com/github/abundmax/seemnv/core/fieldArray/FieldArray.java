@@ -46,7 +46,7 @@ public class FieldArray<T extends Comparable<? super T>> {
             parsedArray[i] = rowFactory.apply(stringFieldArray.length);
 
             for (int j = 0; j < stringFieldArray.length; j++) {
-                parsedArray[i][j] = fieldConfig.fieldType.parseAndCast(stringFieldArray[j]);
+                parsedArray[i][j] = fieldConfig.fieldType().parseAndCast(stringFieldArray[j]);
             }
         }
 
@@ -68,7 +68,7 @@ public class FieldArray<T extends Comparable<? super T>> {
 
         FieldArray<T> first = fieldArrays[0];
         FieldConfig fieldConfig = first.fieldConfig;
-        FieldAggregationStrategy strategy = fieldConfig.aggregationStrategy;
+        FieldAggregationStrategy strategy = fieldConfig.aggregationStrategy();
         IntFunction<T[][]> matrixFactory = first.matrixFactory;
 
         validateCompatible(fieldArrays);
@@ -112,7 +112,7 @@ public class FieldArray<T extends Comparable<? super T>> {
 
         int length = fieldArrays[0].length;
         FieldConfig config = fieldArrays[0].fieldConfig;
-        Class<?> type = config.fieldType.getType();
+        Class<?> type = config.fieldType().getType();
 
         for (FieldArray<?> fieldArray : fieldArrays) {
             if (fieldArray.length != length) {
@@ -123,7 +123,7 @@ public class FieldArray<T extends Comparable<? super T>> {
                 throw new IllegalArgumentException("FieldArrays must have the same FieldConfig");
             }
 
-            if (fieldArray.fieldConfig.fieldType.getType() != type) {
+            if (fieldArray.fieldConfig.fieldType().getType() != type) {
                 throw new IllegalArgumentException("FieldArrays must have the same value type");
             }
         }
