@@ -39,7 +39,7 @@ public class Core {
                 ) {
 
             String vcfReaderLine;
-            String codingSeqReaderLine = "";
+            String codingSeqReaderLine;
 
             // parse Header lines and built fieldToConfig Map
             while ((vcfReaderLine = vcfReader.readLine()).startsWith("##")) {
@@ -56,6 +56,7 @@ public class Core {
             vcfWriter.write(INFO_STRING);
             // write column header #
             vcfWriter.write(vcfReaderLine);
+            vcfWriter.newLine();
 
 
 
@@ -71,6 +72,10 @@ public class Core {
 
             while((vcfReaderLine = vcfReader.readLine()) != null) {
 
+                // write original line into out VCF
+                vcfWriter.write(vcfReaderLine);
+                vcfWriter.newLine();
+
                 String[] entry = vcfReaderLine.split("\t");
                 String[] sampleColumns = Arrays.copyOfRange(entry, 9, entry.length);
                 VCFRecord vcfRecord = new VCFRecord(
@@ -85,9 +90,8 @@ public class Core {
                         entry[8].split(":"),
                         sampleColumns);
 
+                // ignore frame shifts or continued deletions (* values in ALT column)
                 if (vcfRecord.alt().equals("*") || vcfRecord.alt().length() > 1 || vcfRecord.pos() < currentCDSStart) {
-                    vcfWriter.write(vcfReaderLine);
-                    vcfWriter.newLine();
                     continue;
                 }
 
@@ -140,14 +144,7 @@ public class Core {
 
                 int inCodonPosition = Math.toIntExact((vcfRecord.pos() - currentCDSStart) % 3);
                 currentCodon.addRecordAtCodonPos(inCodonPosition, vcfRecord);
-
-
-
             }
-
-
-
-
 
         } catch (IOException e) {
             // TODO
