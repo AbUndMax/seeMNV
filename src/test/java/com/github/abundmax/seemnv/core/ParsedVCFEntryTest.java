@@ -2,13 +2,14 @@ package com.github.abundmax.seemnv.core;
 
 import com.github.abundmax.seemnv.core.fieldArray.FieldArray;
 import com.github.abundmax.seemnv.core.fieldArray.FieldConfig;
+import com.github.abundmax.seemnv.core.fieldArray.VCFRecord;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class VCFentryTest {
+public class ParsedVCFEntryTest {
 
     @BeforeAll
     static void setup() {
@@ -32,19 +33,20 @@ public class VCFentryTest {
         String info = "AC=1;AF=0.0003937;AN=2539;DP=274532;FS=0;MQ=41.86;QD=25.47;SOR=0.855";
         String format = "GT:AD:AF:DP:GQ:PL";
 
-        String sample1 = "0:222,0:0:222:99:0,1800";
-        String sample2 = "0:193,0:0:193:99:0,1350";
-        String sample3 = "0:203,0:0:203:99:0,1350";
-        String sample4 = "0:206,1:0.004831:207:99:0,1575";
+        String[] samples = new String[]{
+                "0:222,0:0:222:99:0,1800",
+                "0:193,0:0:193:99:0,1350",
+                "0:203,0:0:203:99:0,1350",
+                "0:206,1:0.004831:207:99:0,1575"
+        };
 
-        String vcfEntryString = String.join("\t", chrom, pos, id, ref, alt, qual, filter, info, format,
-                                            sample1, sample2, sample3, sample4
-        );
+        VCFRecord testRecord = new VCFRecord(chrom, Long.parseLong(pos), id, ref, alt, qual,
+                                             filter, info, format.split(":"), samples);
 
-        VCFentry testEntry = new VCFentry(vcfEntryString);
+        ParsedVCFEntry testEntry = new ParsedVCFEntry(testRecord);
 
         assertEquals(chrom, testEntry.getCHROM());
-        assertEquals(Integer.valueOf(pos), testEntry.getPOS());
+        assertEquals(Long.valueOf(pos), testEntry.getPOS());
         assertEquals(id, testEntry.getID());
         assertEquals(ref, testEntry.getREF());
         assertEquals(alt, testEntry.getALT());
@@ -56,10 +58,10 @@ public class VCFentryTest {
         assertArrayEquals(new String[]{"AD", "AF", "DP", "GQ", "PL"}, testEntry.getNoGtFormat());
 
         assertEquals(4, testEntry.getGtArray().length);
-        assertEquals(sample1.split(":")[0], testEntry.getGtArray()[0].toString());
-        assertEquals(sample2.split(":")[0], testEntry.getGtArray()[1].toString());
-        assertEquals(sample3.split(":")[0], testEntry.getGtArray()[2].toString());
-        assertEquals(sample4.split(":")[0], testEntry.getGtArray()[3].toString());
+        assertEquals(samples[0].split(":")[0], testEntry.getGtArray()[0].toString());
+        assertEquals(samples[1].split(":")[0], testEntry.getGtArray()[1].toString());
+        assertEquals(samples[2].split(":")[0], testEntry.getGtArray()[2].toString());
+        assertEquals(samples[3].split(":")[0], testEntry.getGtArray()[3].toString());
 
         assertEquals(5, testEntry.getFieldArrays().length);
 
@@ -94,4 +96,6 @@ public class VCFentryTest {
         assertArrayEquals(new Integer[]{0, 1350}, plArray.values[2]);
         assertArrayEquals(new Integer[]{0, 1575}, plArray.values[3]);
     }
+
+    // TODO add combination tests
 }

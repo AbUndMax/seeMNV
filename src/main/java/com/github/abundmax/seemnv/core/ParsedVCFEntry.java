@@ -1,25 +1,14 @@
 package com.github.abundmax.seemnv.core;
 
 
-import com.github.abundmax.seemnv.core.fieldArray.FieldArray;
-import com.github.abundmax.seemnv.core.fieldArray.FieldArrayFabricator;
-import com.github.abundmax.seemnv.core.fieldArray.FieldConfig;
-import com.github.abundmax.seemnv.core.fieldArray.Genotype;
+import com.github.abundmax.seemnv.core.fieldArray.*;
 
 import java.util.Arrays;
 
-public class VCFentry {
+public class ParsedVCFEntry {
 
     // saves the FORMAT specification from the VCF-Entry
-    private final String CHROM;
-    private final Integer POS;
-    private final String ID;
-    private final String REF;
-    private final String ALT;
-    private final String QUAL;
-    private final String FILTER;
-    private final String INFO;
-    private final String[] FORMAT;
+    private final VCFRecord vcfRecord;
     private final String[] noGtFormat;
 
     private final Genotype[] gtArray;
@@ -30,46 +19,30 @@ public class VCFentry {
 
 
     /**
-     * Takes the full entry string and splits it in its respective columns by setting the fields of this class
-     * @param entryString
+     * Takes the a VCFrecord and creates a full functional Entry that parses the Sample Field values.
+     * @param vcfRecord the record that should be processed to a functional Entry
      */
-    public VCFentry(String entryString) {
-
-        // NC_021508	114	.	A	G	1986.54	PASS	AC=1;AF=0.0003937;AN=2539;DP=274532;FS=0;MQ=41.86;QD=25.47;SOR=0.855	GT:AD:AF:DP:GQ:PL	0:222,0:0:222:99:0,1800
-        String[] entry = entryString.split("\t");
-        CHROM = entry[0];
-        POS = Integer.valueOf(entry[1]);
-        ID = entry[2];
-        REF = entry[3];
-        ALT = entry[4];
-        QUAL = entry[5];
-        FILTER = entry[6];
-        INFO = entry[7];
-        FORMAT = entry[8].split(":");
-
-
-        // GT arrays are held seperatly since most of the cMNV combination logic is based on them!
-        String[] formatSplit = entry[8].split(":");
+    public ParsedVCFEntry(VCFRecord vcfRecord) {
+        this.vcfRecord =vcfRecord;
 
         // separat FORMAT contained that resembles the order of Fields in the FieldArray[]
-        noGtFormat = new String[formatSplit.length - 1];
+        noGtFormat = new String[vcfRecord.format().length - 1];
 
         boolean gtContained = false;
         int j = 0;
-        for (int i = 0; i < formatSplit.length; i++) {
-            if (formatSplit[i].equalsIgnoreCase("GT")) {
+        for (int i = 0; i < vcfRecord.format().length; i++) {
+            if (vcfRecord.format()[i].equalsIgnoreCase("GT")) {
                 gtContained = true;
                 i++;
             }
-            noGtFormat[j++] = formatSplit[i];
+            noGtFormat[j++] = vcfRecord.format()[i];
         }
 
-        if (!gtContained) throw new IllegalArgumentException("VCFentry: " + CHROM + POS + "does not contain GT values!");
+        if (!gtContained) throw new IllegalArgumentException("VCFentry: " + vcfRecord.chrom() + vcfRecord.pos() + "does not contain GT values!");
 
-        String[] sampleColumns = Arrays.copyOfRange(entry, 9, entry.length);
         fieldArrays = new FieldArray[noGtFormat.length];
-        gtArray = new Genotype[sampleColumns.length];
-        buildFieldArrays(sampleColumns);
+        gtArray = new Genotype[vcfRecord.samples().length];
+        buildFieldArrays(vcfRecord.samples());
     }
 
 
@@ -78,8 +51,8 @@ public class VCFentry {
         String[][] formattedSampleColumns = reformatSampleColumns(sampleColumns);
 
         int fieldArrayIdx = 0;
-        for (int fieldIdx = 0; fieldIdx < this.FORMAT.length; fieldIdx++) {
-            String fieldID = FORMAT[fieldIdx];
+        for (int fieldIdx = 0; fieldIdx < vcfRecord.format().length; fieldIdx++) {
+            String fieldID = vcfRecord.format()[fieldIdx];
 
             if (fieldID.equalsIgnoreCase("GT")) {
                 fillGtArray(formattedSampleColumns[fieldIdx]);
@@ -89,8 +62,6 @@ public class VCFentry {
             FieldConfig fieldConfig = Core.fieldToConfig.get(fieldID);
             fieldArrays[fieldArrayIdx++] = FieldArrayFabricator.get(fieldConfig).apply(formattedSampleColumns[fieldIdx]);
         }
-
-        //TODO...
     }
 
     /**
@@ -105,7 +76,7 @@ public class VCFentry {
      */
     private String[][] reformatSampleColumns(String[] sampleColumns) {
 
-        String[][] result = new String[FORMAT.length][sampleColumns.length];
+        String[][] result = new String[vcfRecord.format().length][sampleColumns.length];
 
         for (int sampleIdx = 0; sampleIdx < sampleColumns.length; sampleIdx++) {
             String[] split = sampleColumns[sampleIdx].split(":");
@@ -129,39 +100,39 @@ public class VCFentry {
     }
 
     public String[] getFORMAT() {
-        return FORMAT;
+        return vcfRecord.format();
     }
 
     public String getCHROM() {
-        return CHROM;
+        return vcfRecord.chrom();
     }
 
-    public Integer getPOS() {
-        return POS;
+    public long getPOS() {
+        return vcfRecord.pos();
     }
 
     public String getID() {
-        return ID;
+        return vcfRecord.id();
     }
 
     public String getREF() {
-        return REF;
+        return vcfRecord.ref();
     }
 
     public String getALT() {
-        return ALT;
+        return vcfRecord.alt();
     }
 
     public String getQUAL() {
-        return QUAL;
+        return vcfRecord.qual();
     }
 
     public String getFILTER() {
-        return FILTER;
+        return vcfRecord.filter();
     }
 
     public String getINFO() {
-        return INFO;
+        return vcfRecord.info();
     }
 
     public String[] getNoGtFormat() {
@@ -172,7 +143,7 @@ public class VCFentry {
         return gtArray;
     }
 
-    public static VCFentry combine(VCFentry... entries) {
+    public static ParsedVCFEntry combine(ParsedVCFEntry... entries) {
         if (entries == null || entries.length == 0) {
             throw new IllegalArgumentException("At least one VCFentry is required");
         }
@@ -204,13 +175,13 @@ public class VCFentry {
 
 
 
-        VCFentry combinedEntry = new VCFentry("dummy");
+        // VCFentry combinedEntry = new VCFentry();
 
         // TODO: set combinedEntry fields properly
         // combinedEntry.FORMAT = referenceFormat;
         // combinedEntry.fieldArrays = combinedFieldArrays;
 
-        return combinedEntry;
+        return null; // combinedEntry;
     }
 
 }
