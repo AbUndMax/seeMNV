@@ -5,6 +5,7 @@ import com.github.abundmax.seemnv.core.fieldArray.FieldConfig;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -127,7 +128,7 @@ public class Core {
                 // then initialize a new Codon
                 if (codonIdxOfRecord > currentCodon.getCodonIdx()) {
 
-                    List<ParsedVCFEntry> mnvEntries = currentCodon.calculateMNVEntries();
+                    List<ParsedVCFEntry> mnvEntries = calculateMNVEntries(currentCodon);
                     for (ParsedVCFEntry mnvEntry : mnvEntries) {
                         vcfWriter.write(mnvEntry.toString());
                     }
@@ -149,6 +150,12 @@ public class Core {
         } catch (IOException e) {
             // TODO
         }
+    }
+
+    public static List<ParsedVCFEntry> calculateMNVEntries(Codon codon) {
+        ArrayList<ParsedVCFEntry> mnvEntries = new ArrayList<>();
+        // TODO
+        return mnvEntries;
     }
 
 }
