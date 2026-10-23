@@ -1,6 +1,7 @@
 package com.github.abundmax.seemnv.core.fieldArray;
 
 import java.util.Arrays;
+import java.util.StringJoiner;
 import java.util.function.IntFunction;
 
 /**
@@ -9,7 +10,7 @@ import java.util.function.IntFunction;
  *
  * @param <T>
  */
-public class FieldArray<T extends Comparable<? super T>> {
+public class FieldArray<T extends Comparable<? super T>>{
 
     public final FieldConfig fieldConfig;
     public final T[][] values;
@@ -35,6 +36,16 @@ public class FieldArray<T extends Comparable<? super T>> {
         this.length = values.length;
     }
 
+    /**
+     * Parses the input string array into a two-dimensional array of the generic type T.
+     * Each string in the input array is split based on commas. The resulting 2D array
+     * is constructed using the provided factories and the specific field type for parsing.
+     *
+     * @param initialArray an array of strings to be parsed and converted into a 2D array.
+     *                     Each string is split into individual elements using a comma as the delimiter.
+     * @return a two-dimensional array of type T[][] where each element is parsed and cast
+     *         according to the field type configuration.
+     */
     private T[][] parse(String[] initialArray) {
         T[][] parsedArray = matrixFactory.apply(initialArray.length);
 
@@ -51,6 +62,56 @@ public class FieldArray<T extends Comparable<? super T>> {
         }
 
         return parsedArray;
+    }
+
+    /**
+     * Converts this Array to an Array of Strings
+     *
+     * <p>Example:</p>
+     * <pre>
+     *      List of Integer FieldArray:
+     *      [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+     *
+     *      returns:
+     *      ["1,2,3", "4,5,6", "7,8,9"]
+     * </pre>
+     *
+     * @return A string array containing the values of this FieldArray as strings
+     */
+    public String[] toStringArray() {
+        String[] result = new String[this.length];
+        StringBuilder valueBuilder = new StringBuilder();
+
+        for (int i = 0; i < result.length; i++) {
+            valueBuilder.setLength(0); // clear StringBuilder
+            T[] valueArray = this.values[i];
+
+            for (T value : valueArray) {
+                valueBuilder.append(value).append(",");
+            }
+
+            valueBuilder.deleteCharAt(valueArray.length);
+            result[i] = valueBuilder.toString();
+        }
+
+        return result;
+    }
+
+    /**
+     * Converts the array of values at the specified index into a single comma-separated string.
+     *
+     * @param sampleIdx the index of the desired array in the {@code values} field.
+     * @return a comma-separated string representation of the values in the array at the specified index.
+     */
+    public String valueAtAsString(int sampleIdx) {
+        T[] valueArray = this.values[sampleIdx];
+        StringJoiner joiner = new StringJoiner(",");
+
+        for (T value : valueArray) {
+            joiner.add(String.valueOf(value));
+        }
+
+        return joiner.toString();
     }
 
     /**
