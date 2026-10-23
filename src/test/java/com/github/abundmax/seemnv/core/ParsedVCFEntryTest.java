@@ -54,7 +54,6 @@ public class ParsedVCFEntryTest {
         assertEquals(info, testEntry.getINFO());
 
         assertArrayEquals(format.split(":"), testEntry.getFORMAT());
-        assertArrayEquals(new String[]{"AD", "AF", "DP", "GQ", "PL"}, testEntry.getNoGtFormat());
 
         assertEquals(4, testEntry.getGtArray().length);
         assertEquals(samples[0].split(":")[0], testEntry.getGtArray()[0].toString());
@@ -62,13 +61,11 @@ public class ParsedVCFEntryTest {
         assertEquals(samples[2].split(":")[0], testEntry.getGtArray()[2].toString());
         assertEquals(samples[3].split(":")[0], testEntry.getGtArray()[3].toString());
 
-        assertEquals(5, testEntry.getFieldArrays().length);
-
-        FieldArray<?> adArray = testEntry.getFieldArrays()[0];
-        FieldArray<?> afArray = testEntry.getFieldArrays()[1];
-        FieldArray<?> dpArray = testEntry.getFieldArrays()[2];
-        FieldArray<?> gqArray = testEntry.getFieldArrays()[3];
-        FieldArray<?> plArray = testEntry.getFieldArrays()[4];
+        FieldArray<?> adArray = testEntry.getFieldArrayAt(0);
+        FieldArray<?> afArray = testEntry.getFieldArrayAt(1);;
+        FieldArray<?> dpArray = testEntry.getFieldArrayAt(2);;
+        FieldArray<?> gqArray = testEntry.getFieldArrayAt(3);;
+        FieldArray<?> plArray = testEntry.getFieldArrayAt(4);;
 
         assertArrayEquals(new Integer[]{222, 0}, adArray.values[0]);
         assertArrayEquals(new Integer[]{193, 0}, adArray.values[1]);

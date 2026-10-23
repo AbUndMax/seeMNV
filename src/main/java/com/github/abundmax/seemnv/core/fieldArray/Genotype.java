@@ -6,7 +6,7 @@ public class Genotype implements Comparable<Genotype> {
     private final Integer[] alleleNum;
 
     // implicit Phasing is allowed at the start and assumes:
-    //  '/' if at least one '/' is contained, else '|'
+    //  '/' if at least one '/' is contained, else '|' and '0' means explicit!
     private char implicitPhaseIndicator = '0';
 
     public Genotype(String gtFieldString) {
@@ -53,6 +53,16 @@ public class Genotype implements Comparable<Genotype> {
 
         alleleNum[alleleIndex] = number;
         if (implicitPhasing) phasing[0] = implicitPhaseIndicator == '|';
+    }
+
+    private Genotype(boolean[] phasing, Integer[] alleleNum, char implicitPhaseIndicator) {
+        this.phasing = phasing;
+        this.alleleNum = alleleNum;
+        this.implicitPhaseIndicator = implicitPhaseIndicator;
+    }
+
+    public int ploidy() {
+        return this.alleleNum.length;
     }
 
     /**
@@ -103,5 +113,48 @@ public class Genotype implements Comparable<Genotype> {
        if (implicitPhaseIndicator != '0') builder.deleteCharAt(0);
 
        return builder.toString();
+    }
+
+    public static Genotype combine(Genotype... genotypes) {
+        if (genotypes == null || genotypes.length == 0) {
+            throw new IllegalArgumentException("At least one genotype is required");
+        }
+
+        Genotype reference = genotypes[0];
+        int ploidy = reference.ploidy();
+
+        for (Genotype genotype : genotypes) {
+            if (genotype == null || genotype.ploidy() != ploidy) {
+                throw new IllegalArgumentException("All genotypes must have the same ploidy");
+            }
+        }
+
+        Integer[] combinedAlleles = new Integer[ploidy];
+
+        for (int i = 0; i < ploidy; i++) {
+            boolean allAlt = true;
+            boolean hasMissing = false;
+
+            for (Genotype genotype : genotypes) {
+                Integer allele = genotype.alleleNum[i];
+
+                if (allele == null) {
+                    hasMissing = true;
+                    break;
+                }
+
+                if (allele == 0) {
+                    allAlt = false;
+                }
+            }
+
+            if (hasMissing) {
+                combinedAlleles[i] = null;
+            } else {
+                combinedAlleles[i] = allAlt ? 1 : 0;
+            }
+        }
+
+        return new Genotype(reference.phasing.clone(), combinedAlleles, reference.implicitPhaseIndicator);
     }
 }

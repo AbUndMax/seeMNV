@@ -13,4 +13,11 @@ public record VCFRecord(
         String[] format,
         String[] samples
 ) {
+    public int numSamples() {
+        return samples.length;
+    }
+
+    public int numFields() {
+        return format().length;
+    }
 }
