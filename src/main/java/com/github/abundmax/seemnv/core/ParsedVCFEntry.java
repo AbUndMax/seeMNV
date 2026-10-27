@@ -4,6 +4,7 @@ package com.github.abundmax.seemnv.core;
 import com.github.abundmax.seemnv.core.fieldArray.*;
 
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 
 public class ParsedVCFEntry {
@@ -12,6 +13,9 @@ public class ParsedVCFEntry {
     private final VCFRecord vcfRecord;
 
     private final Genotype[] gtArray;
+    private int ploidy;
+    // Bitsets serving as Masks to calculate possible combinations later on
+    private BitSet[] haplotypeTracks;
 
     private final HashMap<String, FieldArray<?>> fieldIDToArray = new HashMap<>();
 
@@ -42,7 +46,7 @@ public class ParsedVCFEntry {
 
         String[][] formattedSampleColumns = reformatSampleColumns(sampleColumns);
 
-        for (int fieldIdx = 0; fieldIdx < vcfRecord.format().length; fieldIdx++) {
+        for (int fieldIdx = 0; fieldIdx < numFields(); fieldIdx++) {
             String fieldID = vcfRecord.format()[fieldIdx];
 
             if (fieldID.equalsIgnoreCase("GT")) {
@@ -68,7 +72,7 @@ public class ParsedVCFEntry {
      */
     private String[][] reformatSampleColumns(String[] sampleColumns) {
 
-        String[][] result = new String[vcfRecord.format().length][sampleColumns.length];
+        String[][] result = new String[numFields()][sampleColumns.length];
 
         for (int sampleIdx = 0; sampleIdx < sampleColumns.length; sampleIdx++) {
             String[] split = sampleColumns[sampleIdx].split(":");
@@ -81,9 +85,46 @@ public class ParsedVCFEntry {
         return result;
     }
 
+    /**
+     * Populates the internal genotype array and initializes haplotype tracking for the samples.
+     *
+     * @param stringGtArray An array of genotype strings, where each element corresponds to a sample's genotype.
+     */
     private void fillGtArray(String[] stringGtArray) {
-        for (int i = 0; i < gtArray.length; i++) {
-            gtArray[i] = new Genotype(stringGtArray[i]);
+        // set first Genotype and lookup the ploidy
+        int firstIdx = 0;
+        Genotype firstGT = new Genotype(stringGtArray[firstIdx]);
+        gtArray[firstIdx] = firstGT;
+        this.ploidy = firstGT.ploidy();
+
+        // initialize BitSets
+        haplotypeTracks = new BitSet[ploidy];
+        for (int i = 0; i < ploidy; i++) {
+            haplotypeTracks[i] = new BitSet(numSamples());
+        }
+
+        setHaploTracks(firstGT, firstIdx);
+
+
+        for (int i = 1; i < numSamples(); i++) {
+            Genotype genotype = new Genotype(stringGtArray[i]);
+            gtArray[i] = genotype;
+            setHaploTracks(genotype, i);
+        }
+    }
+
+    /**
+     * Sets the boolean value in the BitSets for the given genotype at the specified sample Index
+     * @param genotype
+     * @param sampleIdx
+     */
+    private void setHaploTracks(Genotype genotype, int sampleIdx) {
+        Integer[] alleles = genotype.getAlleles();
+
+        for (int alleleIdx = 0; alleleIdx < haplotypeTracks.length; alleleIdx++) {
+            if (alleles[alleleIdx] != null && alleles[alleleIdx] > 0) {
+                haplotypeTracks[alleleIdx].set(sampleIdx);
+            }
         }
     }
 
@@ -143,6 +184,16 @@ public class ParsedVCFEntry {
         return gtArray;
     }
 
+    // ideally copies should be returned, but to save on comp-power, teh direct value is returned
+    // and not a deep copy.
+    public BitSet[] getHaplotypeMasks() {
+        return haplotypeTracks;
+    }
+
+    public int getPloidy() {
+        return this.ploidy;
+    }
+
     public int numSamples() {
         return vcfRecord.numSamples();
     }
@@ -153,11 +204,18 @@ public class ParsedVCFEntry {
 
 
     /**
-     * Takes several {@code ParsedVCFEntries} and aggregate them to a MNVEntry
+     * Takes several {@code ParsedVCFEntries} and aggregates them to a MNVEntry.
+     *
      * @param entries the {@code ParsedVCFEntries} to aggregate
+     * @param codonPositions the affected codon positions
+     * @param participationMasks sample participation masks per haplotype
      * @return the fully setup MNV entry
      */
-    public static VCFRecord aggregateToMNV(ParsedVCFEntry... entries) {
+    public static VCFRecord aggregateToMNV(
+            ParsedVCFEntry[] entries,
+            int[] codonPositions,
+            BitSet[] participationMasks
+    ) {
         if (entries == null || entries.length == 0) {
             throw new IllegalArgumentException("At least one VCFentry is required");
         }
@@ -171,17 +229,22 @@ public class ParsedVCFEntry {
             }
         }
 
-        String sampleString = combineEntriesIntoSampleString(entries);
+        String[] samples = combineEntriesIntoSampleStrings(entries, participationMasks);
 
-
-
-
-
-        //TODO create new vcfRecord
-
-        return null;
+        // TODO: Build correct REF, ALT, POS and INFO for the MNV.
+        return new VCFRecord(
+                reference.getCHROM(),
+                reference.getPOS(),
+                reference.getID(),
+                reference.getREF(),
+                reference.getALT(),
+                reference.getQUAL(),
+                reference.getFILTER(),
+                "cMNV-----------",
+                reference.getFORMAT(),
+                samples
+        );
     }
-
 
     /**
      * Combines multiple {@code ParsedVCFEntry} objects into a single string representation
@@ -190,12 +253,10 @@ public class ParsedVCFEntry {
      *
      * @param entries an array of {@code ParsedVCFEntry} objects to combine. The first entry in
      *                the array is used as the reference for determining field structures.
-     * @return a tab-separated string where each combined value for a single sample is separated
-     *         by a colon, and the aggregated values for all samples are concatenated.
+     * @return a array of string where each combined value for a single sample is separated
+     *         by a colon.
      */
-    private static String combineEntriesIntoSampleString(ParsedVCFEntry... entries) {
-        // Combine FieldArrays
-
+    private static String[] combineEntriesIntoSampleStrings(ParsedVCFEntry[] entries, BitSet[] participationMasks) {
         ParsedVCFEntry reference = entries[0];
 
         // Holds arrays of Fields per sample:
@@ -209,37 +270,38 @@ public class ParsedVCFEntry {
 
             // extra logic for GT fields
             if (fieldID.equalsIgnoreCase("GT")) {
+
                 // for each Sample, iterate over the VCF entries and combine them into a single
                 // Genotype value for that sample, write it to perSampleFields at corresponding sampleIdx & fieldIdx
                 for (int sampleIdx = 0; sampleIdx < reference.numSamples(); sampleIdx++) {
-                    Genotype[] genotypeOverEntriesAtSample = new Genotype[entries.length];
-                    for (int vcfEntry = 0; vcfEntry < genotypeOverEntriesAtSample.length; vcfEntry++) {
-                        genotypeOverEntriesAtSample[vcfEntry] = entries[vcfEntry].getGtArray()[sampleIdx];
-                    }
-                    perSampleFields[sampleIdx][fieldIdx] = Genotype.combine(genotypeOverEntriesAtSample).toString();
+                    perSampleFields[sampleIdx][fieldIdx] = Genotype.toStringFromParticipationMasks(
+                            participationMasks,
+                            sampleIdx
+                    );
                 }
+
                 continue;
             }
 
-            // loop over VCF entries
             FieldArray<?>[] toCombine = new FieldArray[entries.length];
-            for (int vcfEntry = 0; vcfEntry < toCombine.length; vcfEntry++) {
-                toCombine[vcfEntry] = entries[vcfEntry].getFieldArrayAt(fieldID);
+
+            for (int entryIdx = 0; entryIdx < entries.length; entryIdx++) {
+                toCombine[entryIdx] = entries[entryIdx].getFieldArrayAt(fieldID);
             }
 
             FieldArray<?> combined = FieldArray.combineWildcard(toCombine);
+
             for (int sampleIdx = 0; sampleIdx < reference.numSamples(); sampleIdx++) {
                 perSampleFields[sampleIdx][fieldIdx] = combined.valueAtAsString(sampleIdx);
             }
         }
 
-        // combine the separat values into a single String per Sample
-        String[] singleStringPerSample = new String[reference.numSamples()];
+        String[] samples = new String[reference.numSamples()];
+
         for (int sampleIdx = 0; sampleIdx < reference.numSamples(); sampleIdx++) {
-            singleStringPerSample[sampleIdx] = String.join(":", perSampleFields[sampleIdx]);
+            samples[sampleIdx] = String.join(":", perSampleFields[sampleIdx]);
         }
 
-        return String.join("\t", singleStringPerSample);
+        return samples;
     }
-
 }

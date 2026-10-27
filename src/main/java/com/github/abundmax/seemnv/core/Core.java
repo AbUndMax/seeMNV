@@ -5,10 +5,7 @@ import com.github.abundmax.seemnv.core.fieldArray.FieldConfig;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -18,11 +15,14 @@ public class Core {
     public static final HashMap<String, FieldConfig> fieldToConfig = new HashMap<>();
 
     /**
-     * Main loop that reads the input files, finds codonMNVs and writes them to the out file.
+     * Executes an algorithm to detect and process multiple in-codon nucleotide variants (cMNVs)
+     * based on the provided VCF file, coding sequences, and command string. The output is written
+     * to the specified output file.
      *
-     * @param vcfPath path to the vcfFile to be read from
-     * @param codingSequencesPath path to the coding Sequence fasta file
-     * @param outputPath
+     * @param vcfPath Path to the input VCF file containing variant data.
+     * @param codingSequencesPath Path to the file containing coding sequences.
+     * @param outputPath Path to the output file where processed data will be written.
+     * @param command The command string to annotate in the output file, specifying the method of analysis.
      */
     public static void runAlgorithm(Path vcfPath, Path codingSequencesPath, Path outputPath, String command) {
 
@@ -128,9 +128,10 @@ public class Core {
                 // then initialize a new Codon
                 if (codonIdxOfRecord > currentCodon.getCodonIdx()) {
 
-                    List<ParsedVCFEntry> mnvEntries = calculateMNVEntries(currentCodon);
-                    for (ParsedVCFEntry mnvEntry : mnvEntries) {
+                    List<VCFRecord> mnvEntries = calculateMNVEntries(currentCodon);
+                    for (VCFRecord mnvEntry : mnvEntries) {
                         vcfWriter.write(mnvEntry.toString());
+                        vcfWriter.newLine();
                     }
 
                     // generate the codon sequence from the CDS sequence
@@ -152,10 +153,127 @@ public class Core {
         }
     }
 
-    public static List<ParsedVCFEntry> calculateMNVEntries(Codon codon) {
-        ArrayList<ParsedVCFEntry> mnvEntries = new ArrayList<>();
-        // TODO
+    /**
+     * generates all valid MNVentries from a codon.
+     * @param codon
+     * @return
+     */
+    public static List<VCFRecord> calculateMNVEntries(Codon codon) {
+        ArrayList<VCFRecord> mnvEntries = new ArrayList<>();
+
+        List<MNVCandidate> candidates = codon.generateMNVCandidates();
+
+        if (candidates.isEmpty()) {
+            return mnvEntries;
+        }
+
+        ArrayList<MNVCandidate> tripleCandidates = new ArrayList<>();
+        ArrayList<MNVCandidate> pairCandidates = new ArrayList<>();
+
+        for (MNVCandidate candidate : candidates) {
+            if (candidate.size() == 3) {
+                tripleCandidates.add(candidate);
+            } else if (candidate.size() == 2) {
+                pairCandidates.add(candidate);
+            }
+        }
+
+        ArrayList<MNVParticipation> validTripleParticipations = new ArrayList<>();
+
+        for (MNVCandidate tripleCandidate : tripleCandidates) {
+            int ploidy = tripleCandidate.entries()[0].getPloidy();
+
+            BitSet[] participationMasks = calculateParticipationMasks(tripleCandidate.entries(), ploidy);
+
+            if (!hasAnyParticipation(participationMasks)) {
+                continue;
+            }
+
+            MNVParticipation participation = new MNVParticipation(tripleCandidate, participationMasks);
+
+            validTripleParticipations.add(participation);
+
+            mnvEntries.add(calculateSingleMNV(tripleCandidate, participationMasks));
+        }
+
+        for (MNVCandidate pairCandidate : pairCandidates) {
+            int ploidy = pairCandidate.entries()[0].getPloidy();
+
+            BitSet[] participationMasks = calculateParticipationMasks(pairCandidate.entries(), ploidy);
+
+            for (MNVParticipation tripleParticipation : validTripleParticipations) {
+                if (tripleParticipation.candidate().containsAll(pairCandidate)) {
+                    subtractParticipationMasksInPlace(participationMasks, tripleParticipation.participationMasks());
+                }
+            }
+
+            if (!hasAnyParticipation(participationMasks)) {
+                continue;
+            }
+
+            mnvEntries.add(calculateSingleMNV(pairCandidate, participationMasks));
+        }
+
         return mnvEntries;
+    }
+
+    private record MNVParticipation(MNVCandidate candidate, BitSet[] participationMasks) {}
+
+    /**
+     * Calculates per-haplotype participation masks for a given combination of VCF entries.
+     * Each returned BitSet contains the samples that carry ALT on all given entries
+     * for the corresponding haplotype index.
+     *
+     * @param entries the entries to test
+     * @param ploidy the expected ploidy
+     * @return one BitSet per haplotype
+     */
+    private static BitSet[] calculateParticipationMasks(ParsedVCFEntry[] entries, int ploidy) {
+        BitSet[] result = new BitSet[ploidy];
+
+        for (int haplotypeIdx = 0; haplotypeIdx < ploidy; haplotypeIdx++) {
+            BitSet intersection = (BitSet) entries[0].getHaplotypeMasks()[haplotypeIdx].clone();
+
+            for (int entryIdx = 1; entryIdx < entries.length; entryIdx++) {
+                intersection.and(entries[entryIdx].getHaplotypeMasks()[haplotypeIdx]);
+
+                if (intersection.isEmpty()) {
+                    break;
+                }
+            }
+
+            result[haplotypeIdx] = intersection;
+        }
+
+        return result;
+    }
+
+    private static void subtractParticipationMasksInPlace(BitSet[] masks, BitSet[] masksToSubtract) {
+        for (int haplotypeIdx = 0; haplotypeIdx < masks.length; haplotypeIdx++) {
+            masks[haplotypeIdx].andNot(masksToSubtract[haplotypeIdx]);
+        }
+    }
+
+    private static boolean hasAnyParticipation(BitSet[] masks) {
+        for (BitSet mask : masks) {
+            if (!mask.isEmpty()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Calculates a MNV from a given candidate. Does no logical checking, only combines
+     * it into a print-ready MNV.
+     *
+     * @param candidate the candidate to combine
+     * @param participationMasks masks describing participating samples per haplotype
+     * @return the aggregated MNV record
+     */
+    private static VCFRecord calculateSingleMNV(MNVCandidate candidate, BitSet[] participationMasks) {
+        return ParsedVCFEntry.aggregateToMNV(candidate.entries(), candidate.codonPositions(), participationMasks);
     }
 
 }

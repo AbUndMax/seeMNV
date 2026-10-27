@@ -1,13 +1,15 @@
 package com.github.abundmax.seemnv.core.fieldArray;
 
+import java.util.BitSet;
+
 public class Genotype implements Comparable<Genotype> {
 
     private final boolean[] phasing;
     private final Integer[] alleleNum;
 
     // implicit Phasing is allowed at the start and assumes:
-    //  '/' if at least one '/' is contained, else '|' and '0' means explicit!
-    private char implicitPhaseIndicator = '0';
+    //  '/' if at least one '/' is contained, else '|'
+    private char implicitPhaseIndicator = '0'; // '0' value means explicit phasing
 
     public Genotype(String gtFieldString) {
 
@@ -61,10 +63,6 @@ public class Genotype implements Comparable<Genotype> {
         this.implicitPhaseIndicator = implicitPhaseIndicator;
     }
 
-    public int ploidy() {
-        return this.alleleNum.length;
-    }
-
     /**
      * Counts the numbers contained
      * @param input
@@ -84,14 +82,13 @@ public class Genotype implements Comparable<Genotype> {
         return count;
     }
 
-    /**
-     * Returns an {@code Genotype} object holding the value of the specified {@code String}.
-     * @param string the string to be parsed.
-     * @return an {@code Genotype} object
-     */
-   public Genotype valueOf(String string) {
-       return new Genotype(string);
-   }
+    public int ploidy() {
+        return this.alleleNum.length;
+    }
+
+    public Integer[] getAlleles() {
+        return alleleNum;
+    }
 
     @Override
     public int compareTo(Genotype o) {
@@ -156,5 +153,23 @@ public class Genotype implements Comparable<Genotype> {
         }
 
         return new Genotype(reference.phasing.clone(), combinedAlleles, reference.implicitPhaseIndicator);
+    }
+
+    //TODO implement better phasing mechanisms
+    public static String toStringFromParticipationMasks(
+            BitSet[] participationMasks,
+            int sampleIdx
+    ) {
+        StringBuilder builder = new StringBuilder(participationMasks.length * 2 - 1);
+
+        for (int haplotypeIdx = 0; haplotypeIdx < participationMasks.length; haplotypeIdx++) {
+            if (haplotypeIdx > 0) {
+                builder.append('|');
+            }
+
+            builder.append(participationMasks[haplotypeIdx].get(sampleIdx) ? '1' : '0');
+        }
+
+        return builder.toString();
     }
 }

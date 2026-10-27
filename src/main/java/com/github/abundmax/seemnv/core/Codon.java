@@ -24,8 +24,57 @@ public class Codon {
         return codonIdx;
     }
 
+    public String getCodonSeq() {
+        return codonSeq;
+    }
+
     public void addRecordAtCodonPos(int inCodonPosition, VCFRecord vcfRecord) {
         records.get(inCodonPosition).add(new ParsedVCFEntry(vcfRecord));
+    }
+
+    public List<MNVCandidate> generateMNVCandidates() {
+        List<MNVCandidate> candidates = new ArrayList<>();
+
+        addTripleCandidates(candidates);
+
+        addPairCandidates(candidates, 0, 1);
+        addPairCandidates(candidates, 0, 2);
+        addPairCandidates(candidates, 1, 2);
+
+        return candidates;
+    }
+
+    /**
+     * Generates MNVs of length 3 if all positions in the Codon has an VCFentry!
+     * Elsewise the loop won't run and thus return nothing.
+     * @param candidates
+     */
+    private void addTripleCandidates(List<MNVCandidate> candidates) {
+        for (ParsedVCFEntry first : records.get(0)) {
+            for (ParsedVCFEntry second : records.get(1)) {
+                for (ParsedVCFEntry third : records.get(2)) {
+                    candidates.add(new MNVCandidate(
+                            new ParsedVCFEntry[]{first, second, third},
+                            new int[]{0, 1, 2}
+                    ));
+                }
+            }
+        }
+    }
+
+    private void addPairCandidates(
+            List<MNVCandidate> candidates,
+            int firstPosition,
+            int secondPosition
+    ) {
+        for (ParsedVCFEntry first : records.get(firstPosition)) {
+            for (ParsedVCFEntry second : records.get(secondPosition)) {
+                candidates.add(new MNVCandidate(
+                        new ParsedVCFEntry[]{first, second},
+                        new int[]{firstPosition, secondPosition}
+                ));
+            }
+        }
     }
 
     /**
