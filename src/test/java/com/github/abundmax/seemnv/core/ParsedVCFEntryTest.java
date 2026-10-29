@@ -61,11 +61,11 @@ public class ParsedVCFEntryTest {
         assertEquals(samples[2].split(":")[0], testEntry.getGtArray()[2].toString());
         assertEquals(samples[3].split(":")[0], testEntry.getGtArray()[3].toString());
 
-        FieldArray<?> adArray = testEntry.getFieldArrayAt(0);
-        FieldArray<?> afArray = testEntry.getFieldArrayAt(1);;
-        FieldArray<?> dpArray = testEntry.getFieldArrayAt(2);;
-        FieldArray<?> gqArray = testEntry.getFieldArrayAt(3);;
-        FieldArray<?> plArray = testEntry.getFieldArrayAt(4);;
+        FieldArray<?> adArray = testEntry.getFieldArrayAt(1);
+        FieldArray<?> afArray = testEntry.getFieldArrayAt(2);;
+        FieldArray<?> dpArray = testEntry.getFieldArrayAt(3);;
+        FieldArray<?> gqArray = testEntry.getFieldArrayAt(4);;
+        FieldArray<?> plArray = testEntry.getFieldArrayAt(5);;
 
         assertArrayEquals(new Integer[]{222, 0}, adArray.values[0]);
         assertArrayEquals(new Integer[]{193, 0}, adArray.values[1]);
