@@ -129,8 +129,8 @@ public final class MNVRecordBuilder {
     }
 
     private static String buildRef(String codonSequence, int[] codonPositions) {
-        int start = min(codonPositions);
-        int end = max(codonPositions);
+        int start = arrayMin(codonPositions);
+        int end = arrayMax(codonPositions);
 
         return codonSequence.substring(start, end + 1);
     }
@@ -140,8 +140,8 @@ public final class MNVRecordBuilder {
             ParsedVCFEntry[] entries,
             int[] codonPositions
     ) {
-        int start = min(codonPositions);
-        int end = max(codonPositions);
+        int start = arrayMin(codonPositions);
+        int end = arrayMax(codonPositions);
 
         char[] alt = codonSequence.substring(start, end + 1).toCharArray();
 
@@ -257,7 +257,7 @@ public final class MNVRecordBuilder {
         return Arrays.toString(result);
     }
 
-    private static int min(int[] values) {
+    private static int arrayMin(int[] values) {
         int min = values[0];
 
         for (int value : values) {
@@ -269,7 +269,7 @@ public final class MNVRecordBuilder {
         return min;
     }
 
-    private static int max(int[] values) {
+    private static int arrayMax(int[] values) {
         int max = values[0];
 
         for (int value : values) {
