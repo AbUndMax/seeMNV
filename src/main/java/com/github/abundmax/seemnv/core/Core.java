@@ -29,8 +29,8 @@ public class Core {
         String CALL_STRING = "##seeMNVCommand=" + command + "\n";
         String INFO_STRING = "##INFO=<ID=cMNV,Number=1,Type=String,Description=\"" +
                 "Computed Multiple Nucleotide Variant within one Codon." +
-                "Format: QUAL_per_pos | FILTER_per_pos | Num_alt_in_codon | Codon_idx_in_CDS | Original_codon" +
-                "| Variant_codon | affected_positions_in_genome | samples_with_alt_per_position" +
+                "Format: Num_alt_in_codon | Codon_idx_in_CDS | Original_codon | Variant_codon " +
+                "| QUAL_per_pos | FILTER_per_pos | affected_positions_in_genome | samples_with_alt_per_position" +
                 "| intersection_of_samples_with_alt\">\n";
 
         try (
@@ -129,20 +129,20 @@ public class Core {
                 // TODO: check for same chromosome!!!!
                 if (codonIdxOfRecord > currentCodon.getCodonIdx()) {
 
-                    List<VCFRecord> mnvEntries = calculateMNVEntries(currentCodon);
+                    List<VCFRecord> mnvEntries = calculateMNVEntriesInCodon(currentCodon);
                     for (VCFRecord mnvEntry : mnvEntries) {
                         vcfWriter.write(mnvEntry.toString());
                         vcfWriter.newLine();
                     }
 
                     // generate the codon sequence from the CDS sequence
-                    String codonSeq = "";
+                    StringBuilder codonSeq = new StringBuilder();
                     int codonStart = Math.toIntExact(vcfRecord.pos() - currentCDSStart);
                     for (int i = codonStart; i < codonStart + 3; i++) {
-                        codonSeq = codonSeq + currentCDSSequence.charAt(i);
+                        codonSeq.append(currentCDSSequence.charAt(i));
                     }
 
-                    currentCodon = new Codon(codonIdxOfRecord, codonSeq);
+                    currentCodon = new Codon(codonIdxOfRecord, codonSeq.toString());
                 }
 
                 int inCodonPosition = Math.toIntExact((vcfRecord.pos() - currentCDSStart) % 3);
@@ -150,7 +150,7 @@ public class Core {
             }
 
         } catch (IOException e) {
-            // TODO
+            System.out.println(e.getMessage());
         }
     }
 
@@ -159,7 +159,7 @@ public class Core {
      * @param codon
      * @return
      */
-    public static List<VCFRecord> calculateMNVEntries(Codon codon) {
+    public static List<VCFRecord> calculateMNVEntriesInCodon(Codon codon) {
         ArrayList<VCFRecord> mnvEntries = new ArrayList<>();
 
         List<MNVCandidate> candidates = codon.generateMNVCandidates();
@@ -194,7 +194,12 @@ public class Core {
 
             validTripleParticipations.add(participation);
 
-            mnvEntries.add(calculateSingleMNV(tripleCandidate, participationMasks, codon.getCodonSeq(), codon.getCodonIdx()));
+            mnvEntries.add(MNVRecordBuilder.generate(tripleCandidate.entries(),
+                                                     tripleCandidate.codonPositions(),
+                                                     participationMasks,
+                                                     codon.getCodonSeq(),
+                                                     codon.getCodonIdx())
+            );
         }
 
         for (MNVCandidate pairCandidate : pairCandidates) {
@@ -212,7 +217,12 @@ public class Core {
                 continue;
             }
 
-            mnvEntries.add(calculateSingleMNV(pairCandidate, participationMasks, codon.getCodonSeq(), codon.getCodonIdx()));
+            mnvEntries.add(MNVRecordBuilder.generate(pairCandidate.entries(),
+                                                     pairCandidate.codonPositions(),
+                                                     participationMasks,
+                                                     codon.getCodonSeq(),
+                                                     codon.getCodonIdx())
+            );
         }
 
         return mnvEntries;
@@ -265,20 +275,4 @@ public class Core {
 
         return false;
     }
-
-    /**
-     * Calculates a MNV from a given candidate. Does no logical checking, only combines
-     * it into a print-ready MNV.
-     *
-     * @param candidate the candidate to combine
-     * @param participationMasks masks describing participating samples per haplotype
-     * @return the aggregated MNV record
-     */
-    private static VCFRecord calculateSingleMNV(MNVCandidate candidate,
-                                                BitSet[] participationMasks,
-                                                String codonSequence,
-                                                long codon_idx) {
-        return ParsedVCFEntry.aggregateToMNV(candidate.entries(), candidate.codonPositions(), participationMasks, codonSequence, codon_idx);
-    }
-
 }
