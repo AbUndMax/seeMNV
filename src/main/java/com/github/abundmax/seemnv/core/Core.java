@@ -29,8 +29,8 @@ public class Core {
         String CALL_STRING = "##seeMNVCommand=" + command + "\n";
         String INFO_STRING = "##INFO=<ID=cMNV,Number=1,Type=String,Description=\"" +
                 "Computed Multiple Nucleotide Variant within one Codon." +
-                "Format: Num_alt_in_codon | Codon_idx_in_CDS | Original_codon" +
-                "| Variant_codon | affected_positions | samples_with_alt_per_position" +
+                "Format: QUAL_per_pos | FILTER_per_pos | Num_alt_in_codon | Codon_idx_in_CDS | Original_codon" +
+                "| Variant_codon | affected_positions_in_genome | samples_with_alt_per_position" +
                 "| intersection_of_samples_with_alt\">\n";
 
         try (
@@ -126,6 +126,7 @@ public class Core {
 
                 // if a new Codon is reached, evaluate the current Codon in regard of MNVs, write them
                 // then initialize a new Codon
+                // TODO: check for same chromosome!!!!
                 if (codonIdxOfRecord > currentCodon.getCodonIdx()) {
 
                     List<VCFRecord> mnvEntries = calculateMNVEntries(currentCodon);
@@ -193,7 +194,7 @@ public class Core {
 
             validTripleParticipations.add(participation);
 
-            mnvEntries.add(calculateSingleMNV(tripleCandidate, participationMasks));
+            mnvEntries.add(calculateSingleMNV(tripleCandidate, participationMasks, codon.getCodonSeq(), codon.getCodonIdx()));
         }
 
         for (MNVCandidate pairCandidate : pairCandidates) {
@@ -211,7 +212,7 @@ public class Core {
                 continue;
             }
 
-            mnvEntries.add(calculateSingleMNV(pairCandidate, participationMasks));
+            mnvEntries.add(calculateSingleMNV(pairCandidate, participationMasks, codon.getCodonSeq(), codon.getCodonIdx()));
         }
 
         return mnvEntries;
@@ -229,6 +230,7 @@ public class Core {
      * @return one BitSet per haplotype
      */
     private static BitSet[] calculateParticipationMasks(ParsedVCFEntry[] entries, int ploidy) {
+        // TODO: include phasing logic!
         BitSet[] result = new BitSet[ploidy];
 
         for (int haplotypeIdx = 0; haplotypeIdx < ploidy; haplotypeIdx++) {
@@ -272,8 +274,11 @@ public class Core {
      * @param participationMasks masks describing participating samples per haplotype
      * @return the aggregated MNV record
      */
-    private static VCFRecord calculateSingleMNV(MNVCandidate candidate, BitSet[] participationMasks) {
-        return ParsedVCFEntry.aggregateToMNV(candidate.entries(), candidate.codonPositions(), participationMasks);
+    private static VCFRecord calculateSingleMNV(MNVCandidate candidate,
+                                                BitSet[] participationMasks,
+                                                String codonSequence,
+                                                long codon_idx) {
+        return ParsedVCFEntry.aggregateToMNV(candidate.entries(), candidate.codonPositions(), participationMasks, codonSequence, codon_idx);
     }
 
 }

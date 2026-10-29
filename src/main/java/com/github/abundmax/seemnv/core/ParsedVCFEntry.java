@@ -6,6 +6,7 @@ import com.github.abundmax.seemnv.core.fieldArray.*;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.StringJoiner;
 
 public class ParsedVCFEntry {
 
@@ -214,7 +215,9 @@ public class ParsedVCFEntry {
     public static VCFRecord aggregateToMNV(
             ParsedVCFEntry[] entries,
             int[] codonPositions,
-            BitSet[] participationMasks
+            BitSet[] participationMasks,
+            String codonSequence,
+            long codonIdx
     ) {
         if (entries == null || entries.length == 0) {
             throw new IllegalArgumentException("At least one VCFentry is required");
@@ -231,16 +234,92 @@ public class ParsedVCFEntry {
 
         String[] samples = combineEntriesIntoSampleStrings(entries, participationMasks);
 
-        // TODO: Build correct REF, ALT, POS and INFO for the MNV.
+        // Format: Num_alt_in_codon | Codon_idx_in_CDS | Original_codon | Variant_codon |QUAL_per_pos | FILTER_per_pos | affected_positions_genome | samples_with_alt_per_position| intersection_of_samples_with_alt
+        // samples_with_alt_per_position -> actual number of samples showing the Alt at that position
+        // intersection_of_samples_with_alt -> that number of samples which had ALL ALTs over the affected positions for this MNV
+        int ploidy = participationMasks.length;
+
+
+        // ------------------------------------ num_alt_in_codon
+        int num_alt_in_codon = codonPositions.length;
+
+
+        // ------------------------------------ variant_codon
+        char[] variant_codon_prep = codonSequence.toCharArray();
+        for (int i = 0; i < codonPositions.length; i++) {
+            int codonPosition = codonPositions[i];
+            variant_codon_prep[codonPosition] = entries[i].getALT().charAt(0);
+        }
+        String variant_codon = String.valueOf(variant_codon_prep);
+
+
+        // ------------------------------------ qual_per_pos
+        String[] qual_per_pos_prep = {"/", "/", "/"};
+        for (int i = 0; i < codonPositions.length; i++) {
+            int codonPosition = codonPositions[i];
+            qual_per_pos_prep[codonPosition] = entries[i].getQUAL();
+        }
+        String qual_per_pos = Arrays.toString(qual_per_pos_prep);
+
+
+        // ------------------------------------ filter_per_pos
+        String[] filter_per_pos_prep = {"/", "/", "/"};
+        for (int i = 0; i < codonPositions.length; i++) {
+            int codonPosition = codonPositions[i];
+            filter_per_pos_prep[codonPosition] = entries[i].getFILTER();
+        }
+        String filter_per_pos = Arrays.toString(filter_per_pos_prep);
+
+
+        // ------------------------------------ affected_positions_in_genome
+        String[] affected_positions_prep = {"/", "/", "/"};
+        for (int i = 0; i < codonPositions.length; i++) {
+            int codonPosition = codonPositions[i];
+            affected_positions_prep[codonPosition] = String.valueOf(entries[i].getPOS());
+        }
+        String affected_positions_in_genome = Arrays.toString(affected_positions_prep);
+
+
+        // ------------------------------------ samples_with_alt_per_position
+        String[] samples_with_alt_per_position_prep = {"/", "/", "/"};
+        for (int i = 0; i < codonPositions.length; i++) {
+            int codonPosition = codonPositions[i];
+            BitSet[] masks = entries[i].getHaplotypeMasks();
+
+            StringJoiner joiner = new StringJoiner(", ", "[", "]");
+
+            for (int j = 0; j < ploidy; j++) {
+                joiner.add(String.valueOf(masks[j].cardinality()));
+            }
+
+            samples_with_alt_per_position_prep[codonPosition] = joiner.toString();
+        }
+        String samples_with_alt_per_position = Arrays.toString(samples_with_alt_per_position_prep);
+
+
+        // ------------------------------------ intersection_of_samples_with_alt
+        int[] intersection_of_samples_with_alt_prep = new int[ploidy];
+        for (int i = 0; i < ploidy; i++) {
+            intersection_of_samples_with_alt_prep[i] = participationMasks[i].cardinality();
+        }
+        String intersection_of_samples_with_alt = Arrays.toString(intersection_of_samples_with_alt_prep);
+
+
+        // ------------------------------------ final INFO string
+        String INFO = "cMNV=" + num_alt_in_codon + "|" + codonIdx + "|" + codonSequence + "|" + variant_codon + "|" +
+                qual_per_pos + "|" + filter_per_pos + "|" + affected_positions_in_genome + "|" +
+                samples_with_alt_per_position + "|" + intersection_of_samples_with_alt;
+
+
         return new VCFRecord(
                 reference.getCHROM(),
-                reference.getPOS(),
+                entries[0].getPOS(), // MNV entry shows first POS
                 reference.getID(),
-                reference.getREF(),
-                reference.getALT(),
-                reference.getQUAL(),
-                reference.getFILTER(),
-                "cMNV-----------",
+                codonSequence.substring(codonPositions[0], codonPositions[codonPositions.length - 1] + 1),
+                buildALTFromEntries(entries),
+                ".",
+                ".",
+                INFO,
                 reference.getFORMAT(),
                 samples
         );
@@ -303,5 +382,15 @@ public class ParsedVCFEntry {
         }
 
         return samples;
+    }
+
+    private static String buildALTFromEntries(ParsedVCFEntry... entries) {
+        StringBuilder ALT = new StringBuilder();
+
+        for (ParsedVCFEntry entry : entries) {
+            ALT.append(entry.getALT());
+        }
+
+        return ALT.toString();
     }
 }
