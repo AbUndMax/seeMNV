@@ -15,16 +15,37 @@ public class Core {
     public static final HashMap<String, FieldConfig> fieldToConfig = new HashMap<>();
 
     /**
-     * Executes an algorithm to detect and process multiple in-codon nucleotide variants (cMNVs)
-     * based on the provided VCF file, coding sequences, and command string. The output is written
-     * to the specified output file.
-     *
-     * @param vcfPath Path to the input VCF file containing variant data.
-     * @param codingSequencesPath Path to the file containing coding sequences.
-     * @param outputPath Path to the output file where processed data will be written.
-     * @param command The command string to annotate in the output file, specifying the method of analysis.
+     * Functional interface representing a consumer for writing lines of text.
+     * Designed to abstract the writing mechanism, allowing for more flexible
+     * handling of line-based outputs.
+     * <p>
+     * The method signature includes an {@code IOException} to account for
+     * the possibility of IO-related issues during the writing process.
      */
-    public static void runAlgorithm(Path vcfPath, Path codingSequencesPath, Path outputPath, String command) {
+    @FunctionalInterface
+    private interface LineWriter {
+        void write(String line) throws IOException;
+    }
+
+    /**
+     * Reads, processes, and analyzes a VCF (Variant Call Format) file along with coding sequence
+     * data to detect and compute Multiple Nucleotide Variants (MNVs) that occur within a codon.
+     * Outputs the processed information to a specified output file.
+     * <p>
+     *
+     * <b>THE INPUT FILE REMAINS UNTOUCHED!</b>
+     *
+     * @param vcfPath              Path to the input VCF file containing variant information.
+     * @param codingSequencesPath  Path to the file containing coding sequence data used for analysis.
+     * @param outputPath           Path to the output file where processed data is written.
+     * @param command              Command string to describe the execution context stored in the output file metadata.
+     */
+    public static void runAlgorithm(
+            Path vcfPath,
+            Path codingSequencesPath,
+            Path outputPath,
+            String command
+    ) {
 
         String CALL_STRING = "##seeMNVCommand=" + command + "\n";
         String INFO_STRING = "##INFO=<ID=cMNV,Number=1,Type=String,Description=\"" +
@@ -36,14 +57,13 @@ public class Core {
         try (
                 BufferedReader vcfReader = Files.newBufferedReader(vcfPath);
                 BufferedReader codingSeqReader = Files.newBufferedReader(codingSequencesPath);
-                BufferedWriter vcfWriter = Files.newBufferedWriter(outputPath);
-                ) {
+                BufferedWriter vcfWriter = Files.newBufferedWriter(outputPath)
+        ) {
 
             String vcfReaderLine;
-            String codingSeqReaderLine;
 
             // parse Header lines and built fieldToConfig Map
-            while ((vcfReaderLine = vcfReader.readLine()).startsWith("##")) {
+            while ((vcfReaderLine = vcfReader.readLine()) != null && vcfReaderLine.startsWith("##")) {
                 vcfWriter.write(vcfReaderLine);
                 vcfWriter.newLine();
 
@@ -61,98 +81,187 @@ public class Core {
 
 
 
-
-
-            // begin codon scanning and MNV detection
-            long currentCDSStart = 0L;
-            long currentCDSEnd = 0L;
-            String currentSequenceHeader = codingSeqReader.readLine();
-            String currentCDSSequence = "";
-
-            Codon currentCodon = new Codon(0L, "init");
-
-            while((vcfReaderLine = vcfReader.readLine()) != null) {
-
-                // write original line into out VCF
-                vcfWriter.write(vcfReaderLine);
-                vcfWriter.newLine();
-
-                String[] entry = vcfReaderLine.split("\t");
-                String[] sampleColumns = Arrays.copyOfRange(entry, 9, entry.length);
-                VCFRecord vcfRecord = new VCFRecord(
-                        entry[0],
-                        Long.parseLong(entry[1]),
-                        entry[2],
-                        entry[3],
-                        entry[4],
-                        entry[5],
-                        entry[6],
-                        entry[7],
-                        entry[8].split(":"),
-                        sampleColumns);
-
-                // ignore frame shifts or continued deletions (* values in ALT column)
-                if (vcfRecord.alt().equals("*") || vcfRecord.alt().length() > 1 || vcfRecord.pos() < currentCDSStart) {
-                    continue;
-                }
-
-
-
-
-                // if the current VCFentry position exceeds the current CDS, read the next CDS
-                if (currentCDSEnd < vcfRecord.pos()) {
-                    Pattern pattern = Pattern.compile("\\[location=(\\d+)\\.\\.(\\d+)]");
-                    Matcher matcher = pattern.matcher(currentSequenceHeader);
-
-                    if (matcher.find()) {
-                        currentCDSStart = Long.parseLong(matcher.group(1));
-                        currentCDSEnd = Long.parseLong(matcher.group(2));
-                    }
-
-                    // read current CDS sequence
-                    StringBuilder sequenceBuilder = new StringBuilder();
-                    while((codingSeqReaderLine = codingSeqReader.readLine()) != null
-                            && !codingSeqReaderLine.startsWith(">")) {
-                        sequenceBuilder.append(codingSeqReaderLine);
-                    }
-                    currentCDSSequence = sequenceBuilder.toString();
-                    currentSequenceHeader = codingSeqReaderLine;
-                }
-
-
-
-
-                long codonIdxOfRecord = (vcfRecord.pos() - currentCDSStart) / 3;
-
-                // if a new Codon is reached, evaluate the current Codon in regard of MNVs, write them
-                // then initialize a new Codon
-                // TODO: check for same chromosome!!!!
-                if (codonIdxOfRecord > currentCodon.getCodonIdx()) {
-
-                    List<VCFRecord> mnvEntries = calculateMNVEntriesInCodon(currentCodon);
-                    for (VCFRecord mnvEntry : mnvEntries) {
-                        vcfWriter.write(mnvEntry.toString());
+            processVariants(
+                    vcfReader,
+                    codingSeqReader,
+                    line -> {
+                        vcfWriter.write(line);
+                        vcfWriter.newLine();
+                    },
+                    line -> {
+                        vcfWriter.write(line);
                         vcfWriter.newLine();
                     }
-
-                    // generate the codon sequence from the CDS sequence
-                    StringBuilder codonSeq = new StringBuilder();
-                    int codonStart = Math.toIntExact(vcfRecord.pos() - currentCDSStart);
-                    for (int i = codonStart; i < codonStart + 3; i++) {
-                        codonSeq.append(currentCDSSequence.charAt(i));
-                    }
-
-                    currentCodon = new Codon(codonIdxOfRecord, codonSeq.toString());
-                }
-
-                int inCodonPosition = Math.toIntExact((vcfRecord.pos() - currentCDSStart) % 3);
-                currentCodon.addRecordAtCodonPos(inCodonPosition, vcfRecord);
-            }
+            );
 
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            System.err.println(e.getMessage());
         }
     }
+
+    /**
+     * Reads and processes a VCF (Variant Call Format) file and coding sequence data to identify
+     * and extract codon multi-nucleotide variation (cMNV) entries. This method analyzes the
+     * provided data and returns a list of entries as strings.
+     *
+     * @param vcfPath            Path to the VCF file that contains variant data.
+     * @param codingSequencesPath Path to the coding sequences file used for analysis.
+     * @return A list of strings representing the identified cMNV entries.
+     * @throws IOException If an I/O error occurs while reading the input files.
+     */
+    public static List<String> getCMNVEntries(
+            Path vcfPath,
+            Path codingSequencesPath
+    ) throws IOException {
+        List<String> entries = new ArrayList<>();
+
+        try (
+                BufferedReader vcfReader = Files.newBufferedReader(vcfPath);
+                BufferedReader codingSeqReader = Files.newBufferedReader(codingSequencesPath)
+        ) {
+            String vcfReaderLine;
+
+            // Skip VCF metadata header lines.
+            while ((vcfReaderLine = vcfReader.readLine()) != null && vcfReaderLine.startsWith("##")) {
+                // Header line skipped.
+            }
+
+            processVariants(vcfReader,
+                            codingSeqReader,
+                            _ -> {},
+                            entries::add);
+
+        }
+
+        return entries;
+    }
+
+    /**
+     * Processes VCF (Variant Call Format) and coding sequence data to detect and handle
+     * codon variations and multi-nucleotide variations (MNVs). This method reads, analyzes,
+     * and writes processed data to the provided consumers for further use.
+     *
+     * @param vcfReader             BufferedReader for reading VCF file entries line by line.
+     * @param codingSeqReader       BufferedReader for reading coding sequences line by line.
+     * @param originalLineConsumer  LineWriter functional interface for consuming original VCF lines.
+     * @param cMNVConsumer          LineWriter functional interface for consuming computed MNV entries.
+     * @throws IOException          If an I/O error occurs during reading or writing operations.
+     */
+    private static void processVariants(
+            BufferedReader vcfReader,
+            BufferedReader codingSeqReader,
+            LineWriter originalLineConsumer,
+            LineWriter cMNVConsumer
+    ) throws IOException {
+
+        String vcfReaderLine;
+        String codingSeqReaderLine;
+
+        // begin codon scanning and MNV detection
+        long currentCDSStart = 0L;
+        long currentCDSEnd = 0L;
+        String currentSequenceHeader = codingSeqReader.readLine();
+        String currentCDSSequence = "";
+
+        Codon currentCodon = new Codon(0L, "init");
+
+        while((vcfReaderLine = vcfReader.readLine()) != null) {
+
+            // write original line into out VCF
+            originalLineConsumer.write(vcfReaderLine);
+
+            String[] entry = vcfReaderLine.split("\t");
+            String[] sampleColumns = Arrays.copyOfRange(entry, 9, entry.length);
+            VCFRecord vcfRecord = new VCFRecord(
+                    entry[0],
+                    Long.parseLong(entry[1]),
+                    entry[2],
+                    entry[3],
+                    entry[4],
+                    entry[5],
+                    entry[6],
+                    entry[7],
+                    entry[8].split(":"),
+                    sampleColumns);
+
+            // ignore frame shifts or continued deletions (* values in ALT column)
+            if (vcfRecord.alt().equals("*") || vcfRecord.alt().length() > 1 || vcfRecord.pos() < currentCDSStart) {
+                continue;
+            }
+
+
+
+
+            // if the current VCFentry position exceeds the current CDS, read the next CDS
+            if (currentCDSEnd < vcfRecord.pos()) {
+                Pattern pattern = Pattern.compile("\\[location=(\\d+)\\.\\.(\\d+)]");
+                Matcher matcher = pattern.matcher(currentSequenceHeader);
+
+                if (matcher.find()) {
+                    currentCDSStart = Long.parseLong(matcher.group(1));
+                    currentCDSEnd = Long.parseLong(matcher.group(2));
+                }
+
+                // read current CDS sequence
+                StringBuilder sequenceBuilder = new StringBuilder();
+                while((codingSeqReaderLine = codingSeqReader.readLine()) != null
+                        && !codingSeqReaderLine.startsWith(">")) {
+                    sequenceBuilder.append(codingSeqReaderLine);
+                }
+                currentCDSSequence = sequenceBuilder.toString();
+                currentSequenceHeader = codingSeqReaderLine;
+            }
+
+
+            long codonIdxOfRecord = (vcfRecord.pos() - currentCDSStart) / 3;
+
+            // if a new Codon is reached, evaluate the current Codon in regard of MNVs, write them
+            // then initialize a new Codon
+            // TODO: check for same chromosome!!!!
+            if (codonIdxOfRecord > currentCodon.getCodonIdx()) {
+
+                List<VCFRecord> mnvEntries = calculateMNVEntriesInCodon(currentCodon);
+                for (VCFRecord mnvEntry : mnvEntries) {
+                    cMNVConsumer.write(mnvEntry.toString());
+                }
+
+                // generate the codon sequence from the CDS sequence
+                StringBuilder codonSeq = new StringBuilder();
+                int codonStart = Math.toIntExact(vcfRecord.pos() - currentCDSStart);
+                for (int i = codonStart; i < codonStart + 3; i++) {
+                    codonSeq.append(currentCDSSequence.charAt(i));
+                }
+
+                currentCodon = new Codon(codonIdxOfRecord, codonSeq.toString());
+            }
+
+            int inCodonPosition = Math.toIntExact((vcfRecord.pos() - currentCDSStart) % 3);
+            currentCodon.addRecordAtCodonPos(inCodonPosition, vcfRecord);
+        }
+
+        // eval last codon
+        List<VCFRecord> mnvEntries = calculateMNVEntriesInCodon(currentCodon);
+
+        for (VCFRecord mnvEntry : mnvEntries) {
+            cMNVConsumer.write(mnvEntry.toString());
+        }
+    }
+
+    /**
+     * Represents the participation of haplotypes in a given multiple nucleotide variation (MNV) candidate.
+     * An MNV refers to a group of nucleotide changes that occur together within a codon.
+     * <p>
+     * This record encapsulates two components:
+     * 1. The {@link MNVCandidate} object, representing the MNV candidate that includes the relevant
+     *    VCF (Variant Call Format) entries and codon positions.
+     * 2. An array of {@link BitSet} objects, referred to as participation masks. These masks identify
+     *    the contribution of individual haplotypes (samples) to the MNV candidate by indicating
+     *    which samples exhibit the alteration (ALT) across all relevant entries.
+     * <p>
+     * Participation is primarily determined through the use of the `calculateParticipationMasks` method
+     * from the containing class. Each {@link BitSet} in the array represents one haplotype's participation.
+     */
+    private record MNVParticipation(MNVCandidate candidate, BitSet[] participationMasks) {}
 
     /**
      * generates all valid MNVentries from a codon.
@@ -227,8 +336,6 @@ public class Core {
 
         return mnvEntries;
     }
-
-    private record MNVParticipation(MNVCandidate candidate, BitSet[] participationMasks) {}
 
     /**
      * Calculates per-haplotype participation masks for a given combination of VCF entries.

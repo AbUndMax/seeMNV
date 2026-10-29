@@ -4,15 +4,9 @@ import ArgsParser.ParameterTypes.PthParameter;
 import com.github.abundmax.seemnv.core.Core;
 
 
-public class Main {
+public final class Main {
 
-    public static void main(String[] args) {
-        System.out.println("Hello from seeMNV!");
-
-        // args enthält die Kommandozeilenargumente
-        for (String arg : args) {
-            System.out.println(arg);
-        }
+    static void main(String[] args) {
 
         ArgsParser parser = new ArgsParser("Identify and note in-codon MNVs in VCF files");
         PthParameter vcfPath = parser.addParameter(new PthParameter("vcfPath",
@@ -32,6 +26,7 @@ public class Main {
 
         String command = String.join(" ", args);
 
+        System.out.println("Running cMNV detection!");
         Core.runAlgorithm(vcfPath.getArgument(), codingSeqPath.getArgument(), outPath.getArgument(), command);
     }
 }
