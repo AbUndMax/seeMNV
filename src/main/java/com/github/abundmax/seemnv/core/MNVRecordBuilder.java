@@ -37,7 +37,7 @@ public final class MNVRecordBuilder {
 
         return new VCFRecord(
                 reference.getCHROM(),
-                entries[0].getPOS(),
+                reference.getPOS(),
                 reference.getID(),
                 ref,
                 alt,
