@@ -41,7 +41,10 @@ public record FieldConfig(String id, String number, FieldType fieldType, FieldAg
 
         String definedStrategy = CONFIG.getProperty(id);
         if (definedStrategy == null) {
-            throw new IllegalArgumentException("No valid FORMAT ID specified in aggregation.properties for ID: " + id);
+            throw new IllegalArgumentException("Missing fieldID from FORMAT found: " + id
+                                                       + "\n> Please add this fieldID and its desired aggregation "
+                                                       + "strategy to aggregation.properties at: "
+                                                       + AGGREGATION_PROPERTIES_PATH.toAbsolutePath());
         }
 
         FieldAggregationStrategy aggregationStrategy = FieldAggregationStrategy.fromString(definedStrategy);
