@@ -170,19 +170,7 @@ public class Core {
             // write original line into out VCF
             originalLineConsumer.write(vcfReaderLine);
 
-            String[] entry = vcfReaderLine.split("\t");
-            String[] sampleColumns = Arrays.copyOfRange(entry, 9, entry.length);
-            VCFRecord vcfRecord = new VCFRecord(
-                    entry[0],
-                    Long.parseLong(entry[1]),
-                    entry[2],
-                    entry[3],
-                    entry[4],
-                    entry[5],
-                    entry[6],
-                    entry[7],
-                    entry[8].split(":"),
-                    sampleColumns);
+            VCFRecord vcfRecord = VCFRecord.fromString(vcfReaderLine);
 
             // ignore frame shifts or continued deletions (* values in ALT column)
             if (vcfRecord.alt().equals("*") || vcfRecord.alt().length() > 1 || vcfRecord.pos() < currentCDSStart) {
